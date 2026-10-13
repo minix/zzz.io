@@ -16,7 +16,7 @@ pub const Method = enum(u8) {
         var buffer: [@sizeOf(u64)]u8 = @splat(0);
         std.mem.copyForwards(u8, buffer[0..], method);
 
-        return std.mem.readPackedIntNative(u64, buffer[0..], 0);
+        return std.mem.readPackedInt(u64, buffer[0..], 0, @import("builtin").cpu.arch.endian());
     }
 
     pub fn parse(method: []const u8) !Method {

@@ -369,7 +369,7 @@ pub const Server = struct {
 
                     // If in Debug Mode, we will return the error name. In other modes,
                     // we won't to avoid leaking implemenation details.
-                    const body = if (comptime builtin.mode == .Debug) @errorName(e) else "";
+                    const body = if (comptime builtin.mode == .debug) @errorName(e) else "";
 
                     break :blk provision.response.apply(.{
                         .status = .@"Internal Server Error",

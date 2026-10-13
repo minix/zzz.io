@@ -1,15 +1,15 @@
 const std = @import("std");
 const assert = std.debug.assert;
 
-const day_names: []const []const u8 = &.{
-    "Mon",
-    "Tue",
-    "Wed",
-    "Thu",
-    "Fri",
-    "Sat",
-    "Sun",
-};
+//const day_names: []const []const u8 = &.{
+//    "星期一",
+//    "星期二",
+//    "星期三",
+//    "星期四",
+//    "星期五",
+//    "星期六",
+//    "星期日",
+//};
 
 const Month = struct {
     name: []const u8,
@@ -17,36 +17,36 @@ const Month = struct {
 };
 
 const months: []const Month = &.{
-    Month{ .name = "Jan", .days = 31 },
-    Month{ .name = "Feb", .days = 28 },
-    Month{ .name = "Mar", .days = 31 },
-    Month{ .name = "Apr", .days = 30 },
-    Month{ .name = "May", .days = 31 },
-    Month{ .name = "Jun", .days = 30 },
-    Month{ .name = "Jul", .days = 31 },
-    Month{ .name = "Aug", .days = 31 },
-    Month{ .name = "Sep", .days = 30 },
-    Month{ .name = "Oct", .days = 31 },
-    Month{ .name = "Nov", .days = 30 },
-    Month{ .name = "Dec", .days = 31 },
+    Month{ .name = "01", .days = 31 },
+    Month{ .name = "02", .days = 28 },
+    Month{ .name = "03", .days = 31 },
+    Month{ .name = "04", .days = 30 },
+    Month{ .name = "05", .days = 31 },
+    Month{ .name = "06", .days = 30 },
+    Month{ .name = "07", .days = 31 },
+    Month{ .name = "08", .days = 31 },
+    Month{ .name = "09", .days = 30 },
+    Month{ .name = "10", .days = 31 },
+    Month{ .name = "11", .days = 30 },
+    Month{ .name = "12", .days = 31 },
 };
 
 pub const Date = struct {
     const HTTPDate = struct {
         const format = std.fmt.comptimePrint(
-            "{s}, {s} {s} {s} {s}:{s}:{s} GMT",
+            "{s}-{s}-{s}T{s}:{s}:{s}+08:00",
             .{
-                "{[day_name]s}",
-                "{[day]d}",
-                "{[month]s}",
+//                "{[day_name]s}",
                 "{[year]d}",
+                "{[month]s}",
+                "{[day]d}",
                 "{[hour]d:0>2}",
                 "{[minute]d:0>2}",
                 "{[second]d:0>2}",
             },
         );
 
-        day_name: []const u8,
+//        day_name: []const u8,
         day: u8,
         month: []const u8,
         year: u16,
@@ -102,14 +102,14 @@ pub const Date = struct {
         }
 
         const day = remaining_days + 1;
-        const week_day = @mod((days + 3), 7);
+//        const week_day = @mod((days + 3), 7);
 
         const hour: u8 = @intCast(@divFloor(remsecs, 3600));
         const minute: u8 = @intCast(@mod(@divFloor(remsecs, 60), 60));
         const second: u8 = @intCast(@mod(remsecs, 60));
 
         return HTTPDate{
-            .day_name = day_names[@intCast(week_day)],
+//            .day_name = day_names[@intCast(week_day)],
             .day = @intCast(day),
             .month = months[month].name,
             .year = @intCast(year),
@@ -127,7 +127,7 @@ test "Parse Basic Date (Buffer)" {
     var date: Date = Date.init(ts);
     var buffer: [29]u8 = @splat(0);
     const http_date = date.to_http_date();
-    try testing.expectEqualStrings("Fri, 27 Sep 2024 04:25:10 GMT", try http_date.into_buf(buffer[0..]));
+    try testing.expectEqualStrings("2024-09-27T04:25:10+08:00", try http_date.into_buf(buffer[0..]));
 }
 
 test "Parse Basic Date (Alloc)" {
@@ -136,7 +136,7 @@ test "Parse Basic Date (Alloc)" {
     const http_date = date.to_http_date();
     const http_string = try http_date.into_alloc(testing.allocator);
     defer testing.allocator.free(http_string);
-    try testing.expectEqualStrings("Fri, 27 Sep 2024 19:08:25 GMT", http_string);
+    try testing.expectEqualStrings("2024-09-27T19:08:25+08:00", http_string);
 }
 
 test "Parse Basic Date (Writer)" {
@@ -144,8 +144,8 @@ test "Parse Basic Date (Writer)" {
     var date: Date = Date.init(ts);
     const http_date = date.to_http_date();
     var buffer: [29]u8 = @splat(0);
-    var stream: std.Io.Writer = .fixed(buffer[0..]);
+    var stream = std.Io.Writer.fixed(buffer[0..]);
     try http_date.into_writer(&stream);
-    const http_string = stream.buffered();
-    try testing.expectEqualStrings("Wed, 24 Apr 1991 00:15:12 GMT", http_string);
+    const http_string = stream.buffer[0..stream.end];
+    try testing.expectEqualStrings("1991-04-24T00:15:12+08:00", http_string);
 }

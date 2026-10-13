@@ -131,7 +131,7 @@ test "ZeroCopy: Growth" {
     var zc: ZeroCopy(u8) = try .init(testing.allocator, 16);
     defer zc.deinit();
 
-    const large_data: [32]u8 = @splat(1);
+    const large_data = &@as([32]u8, @splat(1));
     const write_area = try zc.get_write_area(large_data.len);
     @memcpy(write_area, large_data);
     zc.mark_written(write_area.len);

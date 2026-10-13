@@ -174,7 +174,7 @@ pub const Route = struct {
             fn handler_fn(ctx: *const Context, _: void) !Respond {
                 const response = ctx.response;
 
-                const cache_control: []const u8 = if (comptime builtin.mode == .Debug)
+                const cache_control: []const u8 = if (comptime builtin.mode == .debug)
                     "no-cache"
                 else
                     comptime std.fmt.comptimePrint(

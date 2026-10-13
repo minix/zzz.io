@@ -29,15 +29,27 @@ pub const Request = struct {
     }
 
     pub fn deinit(self: *Request) void {
+        if (self.uri) |uri| self.allocator.free(uri);
         self.cookies.deinit();
+        self.clear_owned_headers();
         self.headers.deinit();
     }
 
     pub fn clear(self: *Request) void {
+        if (self.uri) |uri| self.allocator.free(uri);
         self.method = null;
         self.uri = null;
         self.body = null;
         self.cookies.clear();
+        self.clear_owned_headers();
+    }
+
+    fn clear_owned_headers(self: *Request) void {
+        var it = self.headers.iterator();
+        while (it.next()) |entry| {
+            self.allocator.free(entry.key_ptr.*);
+            self.allocator.free(entry.value_ptr.*);
+        }
         self.headers.clearRetainingCapacity();
     }
 
@@ -78,7 +90,7 @@ pub const Request = struct {
 
                 const version_string = chunks.next() orelse return HTTPError.MalformedRequest;
                 if (!std.mem.eql(u8, version_string, "HTTP/1.1")) return HTTPError.HTTPVersionNotSupported;
-                self.set(.{ .method = method, .uri = uri_string });
+                try self.set(.{ .method = method, .uri = uri_string });
 
                 // There shouldn't be anything else.
                 if (chunks.next() != null) return HTTPError.MalformedRequest;
@@ -88,7 +100,12 @@ pub const Request = struct {
                 const key = header_iter.next() orelse return HTTPError.MalformedRequest;
                 const value = std.mem.trimStart(u8, header_iter.rest(), &.{' '});
                 if (value.len == 0) return HTTPError.MalformedRequest;
-                try self.headers.put(key, value);
+
+                const owned_key = try self.allocator.dupe(u8, key);
+                errdefer self.allocator.free(owned_key);
+                const owned_value = try self.allocator.dupe(u8, value);
+                errdefer self.allocator.free(owned_value);
+                try self.headers.put(owned_key, owned_value);
             }
         }
 
@@ -101,13 +118,13 @@ pub const Request = struct {
         body: ?[]const u8 = null,
     };
 
-    pub fn set(self: *Request, options: RequestSetOptions) void {
+    pub fn set(self: *Request, options: RequestSetOptions) !void {
         if (options.method) |method| {
             self.method = method;
         }
 
         if (options.uri) |uri| {
-            self.uri = uri;
+            self.uri = try self.allocator.dupe(u8, uri);
         }
 
         if (options.body) |body| {
@@ -224,6 +241,43 @@ test "Expect Incorrect HTTP Version" {
         .request_uri_bytes_max = 512,
     });
     try testing.expectError(HTTPError.HTTPVersionNotSupported, err);
+}
+
+test "uri and headers survive recv buffer reallocation" {
+    const ZeroCopy = @import("../core/zerocopy.zig").ZeroCopy;
+
+    var zc = try ZeroCopy(u8).init(testing.allocator, 32768);
+    defer zc.deinit();
+
+    const head =
+        "POST /warning?key=abc HTTP/1.1\r\n" ++
+        "Host: localhost:9860\r\n" ++
+        "Content-Length: 5\r\n\r\n";
+
+    @memcpy(zc.as_slice()[0..].ptr, head);
+    zc.mark_written(head.len);
+    const header_end = std.mem.indexOf(u8, zc.as_slice(), "\r\n\r\n").? + 4;
+
+    // The framework re-requests the socket-buffer-sized write area after each
+    // read, which relocates the underlying buffer when it has to grow.
+    _ = try zc.get_write_area(32768);
+
+    var request = Request.init(testing.allocator);
+    defer request.deinit();
+
+    try request.parse_headers(zc.as_slice()[0..header_end], .{
+        .request_bytes_max = 1024 * 1024 * 2,
+        .request_uri_bytes_max = 2048,
+    });
+
+    // Deliver the body; reading it grows/relocates the zero-copy buffer again.
+    const body = @as([30000]u8, @splat('x'));
+    const area = try zc.get_write_area(body.len);
+    @memcpy(area.ptr, body[0..]);
+    zc.mark_written(body.len);
+
+    try testing.expectEqualStrings("/warning?key=abc", request.uri.?);
+    try testing.expectEqualStrings("localhost:9860", request.headers.get("Host").?);
 }
 
 test "Malformed AnyCaseStringMap" {

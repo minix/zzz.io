@@ -13,7 +13,7 @@ const MimeOption = union(enum) {
 fn generate_mime_helper(any: anytype) MimeOption {
     assert(@typeInfo(@TypeOf(any)) == .pointer);
     const ptr_info = @typeInfo(@TypeOf(any)).pointer;
-    assert(ptr_info.is_const);
+    assert(ptr_info.attrs.@"const");
 
     switch (ptr_info.size) {
         else => unreachable,
@@ -24,10 +24,10 @@ fn generate_mime_helper(any: anytype) MimeOption {
                     assert(arr_info.child == u8);
                     return MimeOption{ .single = any };
                 },
-                .@"struct" => |struct_info| {
-                    for (struct_info.fields) |field| {
-                        assert(@typeInfo(field.type) == .pointer);
-                        const p_info = @typeInfo(field.type).pointer;
+                .@"struct" => {
+                    inline for (@typeInfo(ptr_info.child).@"struct".field_types) |FT| {
+                        assert(@typeInfo(FT) == .pointer);
+                        const p_info = @typeInfo(FT).pointer;
                         assert(@typeInfo(p_info.child) == .array);
                         const a_info = @typeInfo(p_info.child).array;
                         assert(a_info.child == u8);
@@ -127,12 +127,12 @@ pub const Mime = struct {
 };
 
 const all_mime_types = blk: {
-    const decls = @typeInfo(Mime).@"struct".decls;
-    var mimes: [decls.len]Mime = undefined;
+    const decl_names = @typeInfo(Mime).@"struct".decl_names;
+    var mimes: [decl_names.len]Mime = undefined;
     var index: usize = 0;
-    for (decls) |decl| {
-        if (@TypeOf(@field(Mime, decl.name)) == Mime) {
-            mimes[index] = @field(Mime, decl.name);
+    for (decl_names) |name| {
+        if (@TypeOf(@field(Mime, name)) == Mime) {
+            mimes[index] = @field(Mime, name);
             index += 1;
         }
     }

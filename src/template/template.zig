@@ -18,7 +18,7 @@ pub fn print(writer: *Writer, comptime tmpl: []const u8, args: anytype) !void {
     if (args_type_info != .@"struct") {
         @compileError("expected tuple or struct argument, found " ++ @typeName(ArgsType));
     }
-    const fields_info = args_type_info.@"struct".fields;
+    const fields_info = @typeInfo(ArgsType).@"struct".field_names;
 
     @setEvalBranchQuota(4000);
     comptime var i = 0;
@@ -80,8 +80,8 @@ pub fn print(writer: *Writer, comptime tmpl: []const u8, args: anytype) !void {
 
             const field_pos = meta.fieldIndex(ArgsType, name) orelse
                 @compileError("no field with name '" ++ name ++ "'");
-            const value = @field(args, fields_info[field_pos].name);
-            const value_type = if (meta.fieldIndex(ArgsType, name ++ "_type")) |type_pos| @field(args, fields_info[type_pos].name) else void;
+            const value = @field(args, fields_info[field_pos]);
+            const value_type = if (meta.fieldIndex(ArgsType, name ++ "_type")) |type_pos| @field(args, fields_info[type_pos]) else void;
             const t = tmpl[i .. pos.? + 1];
 
             switch (@TypeOf(value)) {
@@ -109,7 +109,7 @@ pub fn print(writer: *Writer, comptime tmpl: []const u8, args: anytype) !void {
             const pos = meta.fieldIndex(ArgsType, name) orelse
                 @compileError("no field with name '" ++ name ++ "'");
 
-            const value = @field(args, fields_info[pos].name);
+            const value = @field(args, fields_info[pos]);
             switch (@typeInfo(@TypeOf(value))) {
                 .pointer, .array => try writer.print("{s}", .{value}),
                 .comptime_int, .int, .comptime_float, .float => try writer.print("{d}", .{value}),
@@ -127,19 +127,4 @@ pub fn include(comptime tmpl: []const u8, comptime tag: []const u8, comptime con
     if (start == null) @compileError("missing tag " ++ sec);
     const end = start.? + sec.len;
     return tmpl[0..start.?] ++ content ++ tmpl[end..];
-}
-
-pub fn cut(comptime tmpl: []const u8, comptime section: []const u8) []const u8 {
-    @setEvalBranchQuota(60000);
-    const start_sec = "<!--@" ++ section ++ "-->";
-    const end_sec = "<!--/" ++ section ++ "-->";
-
-    comptime var pos = std.mem.findPos(u8, tmpl, 0, start_sec);
-    if (pos == null) @compileError("missing start section " ++ start_sec);
-    const start = pos.? + start_sec.len;
-
-    pos = comptime std.mem.findPos(u8, tmpl, start, end_sec);
-    if (pos == null) @compileError("missing closing section " ++ end_sec);
-
-    return tmpl[start..pos.?];
 }

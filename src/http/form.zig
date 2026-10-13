@@ -1,5 +1,4 @@
 const std = @import("std");
-const assert = std.debug.assert;
 
 const AnyCaseStringMap = @import("../core/any_case_string_map.zig").AnyCaseStringMap;
 const Context = @import("context.zig").Context;
@@ -46,19 +45,23 @@ fn parse_from(allocator: std.mem.Allocator, comptime T: type, comptime name: []c
     };
 }
 
+fn fieldDefault(comptime FT: type, comptime ptr: ?*const anyopaque) ?FT {
+    const dp: *const FT = @ptrCast(@alignCast(ptr orelse return null));
+    return dp.*;
+}
+
 fn parse_struct(allocator: std.mem.Allocator, comptime T: type, map: *const AnyCaseStringMap) !T {
     var ret: T = undefined;
-    assert(@typeInfo(T) == .@"struct");
-    const struct_info = @typeInfo(T).@"struct";
-    inline for (struct_info.fields) |field| {
-        const entry = map.getEntry(field.name);
+    const info = @typeInfo(T).@"struct";
+    inline for (info.field_names, info.field_types, 0..) |name, FT, i| {
+        const entry = map.getEntry(name);
 
         if (entry) |e| {
-            @field(ret, field.name) = try parse_from(allocator, field.type, field.name, e.value_ptr.*);
-        } else if (field.defaultValue()) |default| {
-            @field(ret, field.name) = default;
-        } else if (@typeInfo(field.type) == .optional) {
-            @field(ret, field.name) = null;
+            @field(ret, name) = try parse_from(allocator, FT, name, e.value_ptr.*);
+        } else if (fieldDefault(FT, info.field_attrs[i].default_value_ptr)) |default| {
+            @field(ret, name) = default;
+        } else if (@typeInfo(FT) == .optional) {
+            @field(ret, name) = null;
         } else return error.FieldEmpty;
     }
 
@@ -69,13 +72,13 @@ fn construct_map_from_body(allocator: std.mem.Allocator, m: *AnyCaseStringMap, b
     var pairs = std.mem.splitScalar(u8, body, '&');
 
     while (pairs.next()) |pair| {
-        const field_idx = std.mem.findScalar(u8, pair, '=') orelse return error.MissingSeperator;
-        if (pair.len < field_idx + 2) continue;
+        const field_idx = std.mem.indexOfScalar(u8, pair, '=') orelse return error.MissingSeperator;
+        if (pair.len < field_idx + 2) return error.MissingValue;
 
         const key = pair[0..field_idx];
         const value = pair[(field_idx + 1)..];
 
-        if (std.mem.findScalar(u8, value, '=') != null) return error.MalformedPair;
+        if (std.mem.indexOfScalar(u8, value, '=') != null) return error.MalformedPair;
 
         const decoded_key = try decode_alloc(allocator, key);
         errdefer allocator.free(decoded_key);
@@ -187,7 +190,6 @@ test "FormData: Parsing Missing Value" {
         m.deinit();
     }
 
-    _ = try construct_map_from_body(testing.allocator, &m, body);
-    try testing.expectEqualStrings("abc", m.get("abc").?);
-    try testing.expectEqual(null, m.get("id"));
+    const result = construct_map_from_body(testing.allocator, &m, body);
+    try testing.expectError(error.MissingValue, result);
 }
