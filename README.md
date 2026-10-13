@@ -1,5 +1,5 @@
 # zzz.io
 
-This is a fork of [zzz](https://github.com/tardy-org/zzz) framework updated to use new zig async io.
+This is a fork of [zzz](https://github.com/philipmv/zzz.io) framework updated to use new zig async io.
 
-Compatible Zig Version: `0.17.0`
+Only Support Zig Version: `0.17.0`
